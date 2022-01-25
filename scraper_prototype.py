@@ -30,7 +30,28 @@ class scraper():
         # may be needed to bypass phone number pop up, wait and see
         # skip_button =self.driver.find_element_by_xpath("//*[class='secondary-action']")
         # skip_button.click()
+
+    def search_item(self):
+        search_url="https://www.linkedin.com/search/results/content/?keywords=edinburgh%20fringe%20festival&sortBy=%22date_posted%22"
+        self.driver.get(search_url)
+
+    def scroll(self):
+        scroll_pause_time = 2
+        i = 1 
+        #currently scrolls five times
+        while i < 5:
+            time.sleep(scroll_pause_time)
+            content_container = self.driver.find_elements_by_xpath("//div[@class='search-results-container']/div/div/div")
+            index_last_element = len(content_container) - 1
+            final_element = content_container[index_last_element]
+            self.driver.execute_script("arguments[0].scrollIntoView()",final_element)
+            i+=1
+  
 # %%
-linkedin = scraper("https://www.linkedin.com")
-linkedin.load_and_bypass()
+if __name__ == "__main__":
+    linkedin = scraper("https://www.linkedin.com")
+    linkedin.load_and_bypass()
+    linkedin.search_item()
+    linkedin.scroll()
+
 # %%
