@@ -14,44 +14,39 @@ class scraper():
         self.driver.get(URL)
         time.sleep(1)
 
-    def load_and_bypass(self) -> webdriver.Chrome:
-        email="johnsmith934812@gmail.com"
-        password="as8U6!s"
+    def accept_cookies(self) -> webdriver.Chrome:
+        print("Accepting cookies")
         self.navigate_to(self.URL)
-        accept_cookies_button = self.driver.find_element_by_xpath("//*[@data-control-name='ga-cookie.consent.accept.v3']")
+        time.sleep(2)
+        accept_cookies_button = self.driver.find_element_by_xpath("//button[@id='banner-cookie-consent-allow-all']")
         accept_cookies_button.click()
+    
+    def retrieve_links_from_current_page(self):
         time.sleep(2)
-        email_input = self.driver.find_element_by_xpath("//*[@name='session_key']")
-        password_input = self.driver.find_element_by_xpath("//*[@name='session_password']")
-        email_input.send_keys(email)
-        password_input.send_keys(password)
-        password_input.send_keys(Keys.RETURN)
-        time.sleep(2)
-        # may be needed to bypass phone number pop up, wait and see
-        # skip_button =self.driver.find_element_by_xpath("//*[class='secondary-action']")
-        # skip_button.click()
+        print("Retrieving links")
+        products = self.driver.find_elements_by_xpath("//*[@class='g4m-grid-product-listing']/a")
+        page_list_of_product_urls = [product.get_attribute("href") for product in products]
+        return page_list_of_product_urls
+    
+    def retrieve_links(self):
+        list_of_product_urls = []
+        for i in range(2):
+            url = "https://www.gear4music.com/podcasting/microphones?" + "page=" + str(i+1)
+            print("Current page is", url )
+            self.navigate_to(url)
+            list_of_product_urls.append(self.retrieve_links_from_current_page())
+        print(len(list_of_product_urls))
+        print(list_of_product_urls)
+        return list_of_product_urls
+            
 
-    def search_item(self):
-        search_url="https://www.linkedin.com/search/results/content/?keywords=edinburgh%20fringe%20festival&sortBy=%22date_posted%22"
-        self.driver.get(search_url)
-
-    def scroll(self):
-        scroll_pause_time = 2
-        i = 1 
-        #currently scrolls five times
-        while i < 5:
-            time.sleep(scroll_pause_time)
-            content_container = self.driver.find_elements_by_xpath("//div[@class='search-results-container']/div/div/div")
-            index_last_element = len(content_container) - 1
-            final_element = content_container[index_last_element]
-            self.driver.execute_script("arguments[0].scrollIntoView()",final_element)
-            i+=1
-  
 # %%
 if __name__ == "__main__":
-    linkedin = scraper("https://www.linkedin.com")
-    linkedin.load_and_bypass()
-    linkedin.search_item()
-    linkedin.scroll()
+    gear4music = scraper("https://www.gear4music.com/podcasting/microphones?")
+    gear4music.accept_cookies()
+    gear4music.retrieve_links()
+
+# %%
+
 
 # %%
