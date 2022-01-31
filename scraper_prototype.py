@@ -1,9 +1,13 @@
 
 # %%
 from email.mime import image
+from gc import collect
 from selenium import webdriver
 import time
 import uuid
+from pathlib import Path
+import os
+import json
 # %%
 
 
@@ -47,42 +51,31 @@ class scraper():
         self.list_of_product_urls = list_of_product_urls
         return list_of_product_urls
 
-    def collect_data(self, url):
-        print("Collecting data")
-        data = {}
+    def collect_data_from_url(self, url):
+        print("Collecting data from", url)
         time.sleep(1)
         self.navigate_to(url)
         product_ref = self.driver.find_element_by_xpath(
-            "//p[@class='prd-ref']").text.split(":")[1]
-        print("Product ref:", product_ref)
+            "//p[@class='prd-ref']").text.split(":")[1].strip()
         product_uuid = uuid.uuid4()
-        print("UUID:", product_uuid)
-        # TODO retrieve data
         product_name = self.driver.find_element_by_xpath(
             "//h1[@itemprop='name']").text
-        print("Name:", product_name)
         price = self.driver.find_element_by_xpath(
             "//span[@class='c-val']").text
-        print("Price: £", price)
         # TODO deal with case where out of stock
         stock = self.driver.find_element_by_xpath(
             "//div[@class='tooltip-source info-row-stock-msg instock in-stock']").text.split()[0]
-        print("Stock:", stock)
         description = self.driver.find_element_by_xpath(
             "//div[@class='slide']").text.split(":", 1)[1]
-        print("Description:", description)
         main_image = self.driver.find_element_by_xpath(
             "//img[@class='main-image']"
         ).get_attribute("src")
-        print("Image:", main_image)
         other_images_container = self.driver.find_elements_by_xpath(
             "//li[@class='image']/a"
         )
         other_images = [image.get_attribute(
             "href") for image in other_images_container]
-        print(other_images)
         # check if it's flagged as a sale
-
         special_messages = self.driver.find_elements_by_xpath(
             "//div[@class='info-row-special-msg info-row-item']"
         )
@@ -90,13 +83,39 @@ class scraper():
         for message in special_messages:
             if message.text == "SALE":
                 sale = True
-        print("On sale:", sale)
+
+        data = {"product_uuid": str(product_uuid), 
+                "product_ref": product_ref, 
+                "product_name": product_name,
+                "stock": stock,
+                "description": description, 
+                "main_image": main_image,
+                "other_images":other_images,
+                "sale": sale }
+        return data
+
+    @staticmethod
+    def save_to_file(data):
+        current_directory = os.getcwd()
+        target_directory = os.path.join(current_directory,"raw_data", data["product_ref"])
+        file_location = os.path.join(target_directory,"data.json")
+        print("attempting to create", target_directory)
+        Path(target_directory).mkdir(parents=True, exist_ok=True)
+        with open(file_location, "w") as f:
+            json.dump(data, f)
+
+    def collect_data_and_store(self):
+        for url in self.list_of_product_urls: 
+            data = self.collect_data_from_url(url)
+            self.save_to_file(data)
+        #TODO deal with images
 
 
 # %%
 if __name__ == "__main__":
     gear4music = scraper("https://www.gear4music.com/podcasting/microphones")
-    gear4music.collect_data("https://www.gear4music.com/Recording-and-Computers/SZC-300-USB-Condenser-Microphone-with-Microphone-Arm/3RKW")
+    gear4music.retrieve_links(1)
+    gear4music.collect_data_and_store()
 # %%
 
 # %%
