@@ -62,7 +62,6 @@ class scraper():
             "//h1[@itemprop='name']").text
         price = self.driver.find_element_by_xpath(
             "//span[@class='c-val']").text
-        # TODO deal with case where out of stock
         stock = self.driver.find_element_by_xpath(
             "//div[@class='tooltip-source info-row-stock-msg instock in-stock']").text.split()[0]
         description = self.driver.find_element_by_xpath(
@@ -89,6 +88,7 @@ class scraper():
         data = {"product_uuid": str(product_uuid), 
                 "product_ref": product_ref, 
                 "product_name": product_name,
+                "price": price, 
                 "stock": stock,
                 "description": description, 
                 "images": images,
