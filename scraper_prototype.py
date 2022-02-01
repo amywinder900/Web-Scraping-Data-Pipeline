@@ -1,5 +1,6 @@
 
 # %%
+from xxlimited import new
 from selenium import webdriver
 import time
 import uuid
@@ -18,7 +19,6 @@ class scraper():
     def navigate_to(self, url) -> webdriver.Chrome:
         print("Navigating to: ", url)
         self.driver.get(url)
-        time.sleep(1)
 
     def accept_cookies(self) -> webdriver.Chrome:
         print("Accepting cookies")
@@ -35,23 +35,29 @@ class scraper():
             "//*[@class='g4m-grid-product-listing']/a")
         page_list_of_product_urls = [
             product.get_attribute("href") for product in products]
-        return page_list_of_product_urls
+        #checks if final product has been reached
+        if len(page_list_of_product_urls) < 40:
+            return (page_list_of_product_urls, True)
+        else:
+            return (page_list_of_product_urls, False)
 
-    def retrieve_product_links(self, number_of_pages=2):
+    def retrieve_product_links(self):
         self.accept_cookies()
-        print("Retrieving links from", number_of_pages, "pages")
         list_of_product_urls = []
-        for i in range(number_of_pages):
+        i = 1
+        while True:
             url = self.website_url + \
-                "?page=" + str(i+1)
+                "?page=" + str(i)
             self.navigate_to(url)
-            list_of_product_urls.extend(
-                self.retrieve_links_from_current_page())
-        print(list_of_product_urls)
+            (new_product_urls, end_of_pages) = self.retrieve_links_from_current_page()
+            list_of_product_urls.extend(new_product_urls)
+            if end_of_pages == True:
+                break
+            else: i += 1
         self.list_of_product_urls = list_of_product_urls
         return list_of_product_urls
 
-    def collect_data_from_url(self, url):
+    def collect_data_for_product(self, url):
         print("Collecting data from", url)
         time.sleep(1)
         self.navigate_to(url)
@@ -76,7 +82,7 @@ class scraper():
         images = [image.get_attribute(
             "href") for image in other_images_container]
         images.insert(0,main_image)
-        # check if it's flagged as a sale
+        #checks if it's flagged as a sale
         special_messages = self.driver.find_elements_by_xpath(
             "//div[@class='info-row-special-msg info-row-item']"
         )
@@ -84,7 +90,7 @@ class scraper():
         for message in special_messages:
             if message.text == "SALE":
                 sale = True
-
+        #creates dictionary of the data
         data = {"product_uuid": str(product_uuid), 
                 "product_ref": product_ref, 
                 "product_name": product_name,
@@ -129,7 +135,7 @@ class scraper():
 
     def collect_data_and_store(self):
         for url in self.list_of_product_urls:
-            data = self.collect_data_from_url(url)
+            data = self.collect_data_for_product(url)
             scraper.save_data_to_file(data)
             scraper.save_images_to_directory(data)
             
@@ -139,9 +145,10 @@ class scraper():
 # %%
 if __name__ == "__main__":
     gear4music = scraper("https://www.gear4music.com/podcasting/microphones")
-    gear4music.retrieve_product_links(1)
+    list_of_urls = gear4music.retrieve_product_links()
     gear4music.collect_data_and_store()
 # %%
+
 
 
 # %%
