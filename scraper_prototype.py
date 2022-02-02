@@ -1,6 +1,6 @@
 
 # %%
-from email.mime import image
+from lib2to3.pgen2 import driver
 import os
 import json
 import requests
@@ -27,7 +27,7 @@ class Scraper:
         self.webpage_url = webpage_url
         self.driver = webdriver.Chrome()
 
-    def __accept_cookies(self) -> webdriver.Chrome:
+    def __accept_cookies(self):
         """
         A private method which accepts cookies for gear4music.com
         """
@@ -38,20 +38,26 @@ class Scraper:
             "//button[@id='banner-cookie-consent-allow-all']")
         accept_cookies_button.click()
 
-    def __retrieve_links_from_current_page(self):
+    def __retrieve_links_from_current_page(self) -> list:
         """
         A private method which retrieves links from the driver's current page.
+
+        Returns: 
+            page_list_of_product_urls(list): The list of the urls on the current page of the driver.
         """
         time.sleep(2)
         products = self.driver.find_elements_by_xpath(
             "//*[@class='g4m-grid-product-listing']/a")
         page_list_of_product_urls = [
             product.get_attribute("href") for product in products]
-        return (page_list_of_product_urls)
+        return page_list_of_product_urls
 
-    def retrieve_product_links(self):
+    def retrieve_product_links(self) -> list:
         """
         Retrieves all product links for this driver.
+
+        Returns: 
+            list_of_product_urls(list): The list of urls for products of this type.
         """
         self.__accept_cookies()
         list_of_product_urls = []
@@ -64,9 +70,9 @@ class Scraper:
             self.driver.get(url)
             new_product_urls = self.__retrieve_links_from_current_page()
             list_of_product_urls.extend(new_product_urls)
-            #removes duplicates
+            #Removes duplicates from the list of urls
             list_of_product_urls = [i for n, i in enumerate(list_of_product_urls)if i not in list_of_product_urls[:n]]
-            #checks if any new urls have been collected
+            #Stops the loop if no new product urls have been collected
             new_total_urls_collected = len(list_of_product_urls)
             if new_total_urls_collected == unique_urls_collected:
                 break
@@ -75,14 +81,18 @@ class Scraper:
                 unique_urls_collected = new_total_urls_collected
 
         self.list_of_product_urls = list_of_product_urls
+
         return list_of_product_urls
 
-    def collect_data_for_product(self, product_url: str):
+    def collect_data_for_product(self, product_url: str)->dict:
         """
         Collects the data and image links for a given product.
 
         Args: 
             product_url(str): The url of the product to retrieve data from.
+        
+        Returns: 
+            data(dict): The dictionary of data for the product.
         """
         print("Collecting data from", product_url)
         time.sleep(1)
@@ -97,7 +107,7 @@ class Scraper:
         stock_container = self.driver.find_elements_by_xpath(
             "//div[@class='tooltip-container info-row-stock info-row-item']/div")[0]
         if stock_container.get_attribute("class")=="tooltip-source info-row-stock-msg instock in-stock":
-            stock = stock_container.text.split([0])
+            stock = stock_container.text.split()[0]
         else:
             stock = stock_container.text
         description = self.driver.find_element_by_xpath(
@@ -120,7 +130,7 @@ class Scraper:
         for message in special_messages:
             if message.text == "SALE":
                 sale = True
-        # creates dictionary of the data
+        # Creates dictionary of the data.
         data = {"product_uuid": str(product_uuid),
                 "product_ref": product_ref,
                 "product_name": product_name,
@@ -133,14 +143,13 @@ class Scraper:
 
     @staticmethod
     def __create_directories(product_ref:str):
-        # TODO update this function so that the arguments are neater
         """
         Creates directories required to scrape data for a product.
 
 
-        Args
+        Args:
             product_ref(str): The reference number of the product.
-
+        
         """
         current_directory = os.getcwd()
         data_directory = os.path.join(current_directory, "raw_data")
@@ -209,5 +218,5 @@ if __name__ == "__main__":
     gear4music = Scraper("https://www.gear4music.com/dj-equipment/mobile-dj/microphones?_gl=1*1wxixgz*_ga*MjE1MDU3NzY1LjE2NDM4MTQ0NzE.*_up*MQ..")
     gear4music.retrieve_product_links()
     gear4music.collect_data_and_store()
-# %%
+
 # %%
