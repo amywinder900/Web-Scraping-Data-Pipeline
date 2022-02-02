@@ -94,8 +94,12 @@ class Scraper:
             "//h1[@itemprop='name']").text
         price = self.driver.find_element_by_xpath(
             "//span[@class='c-val']").text
-        stock = self.driver.find_element_by_xpath(
-            "//div[@class='tooltip-source info-row-stock-msg instock in-stock']").text.split()[0]
+        stock_container = self.driver.find_elements_by_xpath(
+            "//div[@class='tooltip-container info-row-stock info-row-item']/div")[0]
+        if stock_container.get_attribute("class")=="tooltip-source info-row-stock-msg instock in-stock":
+            stock = stock_container.text.split([0])
+        else:
+            stock = stock_container.text
         description = self.driver.find_element_by_xpath(
             "//div[@class='slide']").text.split(":", 1)[1]
         # retrieve the images
