@@ -211,11 +211,19 @@ class Scraper:
             Scraper.save_data_to_file(data, product_directory)
             Scraper.save_images_to_directory(data, image_directory)
 
+    def close_scraper(self):
+        """
+        Closes the windows associated with the scraper. 
+        """
+        self.driver.quit()
+
 
 # %%
 if __name__ == "__main__":
     gear4music = Scraper("https://www.gear4music.com/dj-equipment/mobile-dj/microphones?_gl=1*1wxixgz*_ga*MjE1MDU3NzY1LjE2NDM4MTQ0NzE.*_up*MQ..")
     gear4music.retrieve_product_links()
     gear4music.collect_data_and_store()
+    gear4music.close_scraper
 
+# %%
 # %%
