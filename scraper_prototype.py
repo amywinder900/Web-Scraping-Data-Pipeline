@@ -228,6 +228,7 @@ class Scraper:
         print("Collecting data from URLs.")
         print(type(self.list_of_product_urls))
         for url in self.list_of_product_urls:
+            print("Collecting data for ", url)
             data = self.collect_data_for_product(url)
             (product_directory, image_directory) = Scraper.__create_directories(
                 data["product_ref"])
