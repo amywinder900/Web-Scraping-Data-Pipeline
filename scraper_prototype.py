@@ -179,7 +179,7 @@ class Scraper:
         return (product_directory, image_directory)
 
     @staticmethod
-    def save_data_to_file(data: dict, product_directory: str):
+    def __save_data_to_file(data: dict, product_directory: str):
         """
         Saves product data to correct location in directory. 
 
@@ -207,7 +207,7 @@ class Scraper:
         return None
 
     @staticmethod
-    def save_images_to_directory(data: dict, image_directory):
+    def __save_images_to_directory(data: dict, image_directory:str):
         """
         Retrieves all the image files for data scraped from a product page. 
 
@@ -221,20 +221,28 @@ class Scraper:
             Scraper.__download_image(local_file_location, image_src)
             i = +1
 
-    def collect_data_and_store(self):
+    def collect_product_data_and_store(self, url:str):
+        """
+        Collects the data for a product and stores it locally. 
+
+        Arguments:
+            url(str): The url for the product.
+        """
+        print("Collecting data for ", url)
+        data = self.collect_data_for_product(url)
+        (product_directory, image_directory) = Scraper.__create_directories(
+            data["product_ref"])
+        Scraper.__save_data_to_file(data, product_directory)
+        Scraper.__save_images_to_directory(data, image_directory)
+        return None
+
+    def collect_all_data_and_store(self):
         """
         Collects and stores the data for a list of product urls obtained by the scraper. 
         """
         print("Collecting data from URLs.")
-        print(type(self.list_of_product_urls))
         for url in self.list_of_product_urls:
-            print("Collecting data for ", url)
-            data = self.collect_data_for_product(url)
-            (product_directory, image_directory) = Scraper.__create_directories(
-                data["product_ref"])
-            Scraper.save_data_to_file(data, product_directory)
-            Scraper.save_images_to_directory(data, image_directory)
-
+            self.collect_product_data_and_store(url)
         return None
 
     def close_scraper(self):
@@ -251,7 +259,7 @@ if __name__ == "__main__":
     gear4music = Scraper(
         "https://www.gear4music.com/dj-equipment/mobile-dj/microphones?_gl=1*1wxixgz*_ga*MjE1MDU3NzY1LjE2NDM4MTQ0NzE.*_up*MQ..")
     gear4music.retrieve_product_links()
-    gear4music.collect_data_and_store()
+    gear4music.collect_all_data_and_store()
     gear4music.close_scraper
 
 # %%
