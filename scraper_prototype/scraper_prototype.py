@@ -6,6 +6,8 @@ import json
 import requests
 import time
 import uuid
+import shutil
+import boto3
 from selenium import webdriver
 from pathlib import Path
 from selenium.webdriver.remote.webelement import WebElement
@@ -17,60 +19,69 @@ class Scraper:
     This class is used to scrape product data from gear4music.com
 
     Attributes:
-        webpage_url (str): The URL of the product type to be scraped.
+        website_url (str): The URL of the Website to be scraped.
 
     """
 
-    def __init__(self, webpage_url: str):
+    def __init__(self, website_url):
         """
         See help(Scraper)
         """
-        self.webpage_url = webpage_url
+        self.website_url = website_url
         self.driver = webdriver.Chrome()
 
-    def __accept_cookies(self):
+    def accept_cookies(self, xpath: str) -> None:
         """
-        A private method which accepts cookies for gear4music.com
+        A method which loads the website and accepts cookies for a given xpath. 
+
+        Arguments: 
+            xpath(str): The xpath of the accept cookies
         """
         print("Accepting cookies")
-        self.driver.get(self.webpage_url)
+        self.driver.get(self.website_url)
         time.sleep(2)
-        accept_cookies_button = self.driver.find_element_by_xpath(
-            "//button[@id='banner-cookie-consent-allow-all']")
+        accept_cookies_button = self.driver.find_element_by_xpath(xpath)
         accept_cookies_button.click()
         return None
 
-    def __retrieve_links_from_current_page(self) -> list:
+    def __retrieve_links_from_current_page(self, product_grid_xpath: str) -> list:
         """
         A private method which retrieves links from the driver's current page.
+
+        Arguments:
+            product_grid_xpath (str): The xpath for the container which holds the products.  
+
 
         Returns:
             page_list_of_product_urls(list): The list of the urls on the current page of the driver.
         """
         time.sleep(2)
-        products = self.driver.find_elements_by_xpath(
-            "//*[@class='g4m-grid-product-listing']/a")
+        products = self.driver.find_elements_by_xpath(product_grid_xpath)
         page_list_of_product_urls = [
             product.get_attribute("href") for product in products]
         return page_list_of_product_urls
 
-    def retrieve_product_links(self) -> list:
+    def retrieve_product_links(self, product_url: str, product_grid_xpath: str) -> list:
         """
-        Retrieves all product links for this driver.
+        Retrieves the product links for the section of the website specified. 
+
+        Arguments: 
+            product_url(str): The URL for the section of the website to be scraped. 
+            product_grid_xpath (str): The xpath for the container which holds the products.  
 
         Returns:
             list_of_product_urls(list): The list of urls for products of this type.
         """
-        self.__accept_cookies()
         list_of_product_urls = []
         i = 1
         unique_urls_collected = 0
         while True:
             print("Retriving links from page", i)
-            url = self.webpage_url + \
+            url = product_url + \
                 "?page=" + str(i)
             self.driver.get(url)
-            new_product_urls = self.__retrieve_links_from_current_page()
+            new_product_urls = self.__retrieve_links_from_current_page(
+                product_grid_xpath)
             list_of_product_urls.extend(new_product_urls)
             # Removes duplicates from the list of urls
             list_of_product_urls = [i for n, i in enumerate(
@@ -168,6 +179,10 @@ class Scraper:
 
         Args:
             product_ref(str): The reference number of the product.
+        
+        Returns:
+            product_directory(str): The path to the directory for the product. 
+            image_director (str): The path to the directory for images related to the product.
 
         """
         current_directory = os.getcwd()
@@ -207,7 +222,7 @@ class Scraper:
         return None
 
     @staticmethod
-    def __save_images_to_directory(data: dict, image_directory:str):
+    def __save_images_to_directory(data: dict, image_directory: str):
         """
         Retrieves all the image files for data scraped from a product page. 
 
@@ -221,7 +236,7 @@ class Scraper:
             Scraper.__download_image(local_file_location, image_src)
             i = +1
 
-    def collect_product_data_and_store(self, url:str):
+    def collect_product_data_and_store(self, url: str):
         """
         Collects the data for a product and stores it locally. 
 
@@ -245,6 +260,34 @@ class Scraper:
             self.collect_product_data_and_store(url)
         return None
 
+    @staticmethod
+    def __delete_from_local_machine():
+        """
+        Removes the raw data from the local machine. 
+        """
+        directory = os.path.join(os.getcwd(), "raw_data")
+        print("Deleting", directory)
+        shutil.rmtree(directory)
+        return None
+
+    def upload_to_bucket(self, bucket:str, delete_from_local:bool=True) -> None:
+        """
+        Uploads the data to a bucket. 
+
+        Arguments:
+            bucket(str): The bucket to upload to. 
+            delete_from_local(bool): If true then the method will delete the raw data file from the local machine. True by default.
+        """
+        s3_client = boto3.client('s3')
+        print("Uploading data to s3 bucket ", bucket)
+        for subdirectories, directories, files in os.walk("/home/amy/Web-Scraping-Data-Pipeline/raw_data"):
+            for file in files:
+                full_path = os.path.join(subdirectories, file)
+                s3_client.upload_file(full_path, bucket, full_path)
+        if delete_from_local == True:
+            Scraper.__delete_from_local_machine()
+        return None
+
     def close_scraper(self):
         """
         Closes the windows associated with the scraper. 
@@ -256,10 +299,13 @@ class Scraper:
 
 # %%
 if __name__ == "__main__":
-    gear4music = Scraper(
-        "https://www.gear4music.com/dj-equipment/mobile-dj/microphones?_gl=1*1wxixgz*_ga*MjE1MDU3NzY1LjE2NDM4MTQ0NzE.*_up*MQ..")
-    gear4music.retrieve_product_links()
+    gear4music = Scraper("https://www.gear4music.com")
+    gear4music.accept_cookies(
+        "//button[@id='banner-cookie-consent-allow-all']")
+    gear4music.retrieve_product_links(
+        "https://www.gear4music.com/dj-equipment/scratch-dj/mixers", "//*[@class='g4m-grid-product-listing']/a")
     gear4music.collect_all_data_and_store()
-    gear4music.close_scraper
+    gear4music.close_scraper()
+    gear4music.upload_to_bucket('productwebscraper')
 
 # %%
