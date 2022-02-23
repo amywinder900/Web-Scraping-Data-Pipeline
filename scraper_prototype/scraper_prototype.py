@@ -8,6 +8,7 @@ import time
 import uuid
 import shutil
 import boto3
+from datetime import datetime
 from selenium import webdriver
 from pathlib import Path
 from selenium.webdriver.remote.webelement import WebElement
@@ -29,6 +30,8 @@ class Scraper:
         """
         self.website_url = website_url
         self.driver = webdriver.Chrome()
+        self.raw_data_directory = datetime.today().strftime('%Y%m%d')+ '_raw_data'
+
 
     def accept_cookies(self, xpath: str) -> None:
         """
@@ -67,7 +70,7 @@ class Scraper:
 
         Arguments: 
             product_url(str): The URL for the section of the website to be scraped. 
-            product_grid_xpath (str): The xpath for the container which holds the products.  
+            product_grid_xpath(str): The xpath for the container which holds the products.  
 
         Returns:
             list_of_product_urls(list): The list of urls for products of this type.
@@ -171,8 +174,8 @@ class Scraper:
                 "sale": self.check_sale()}
         return data
 
-    @staticmethod
-    def __create_directories(product_ref: str):
+
+    def __create_directories(self,product_ref: str):
         """
         Creates directories required to scrape data for a product.
 
@@ -186,7 +189,7 @@ class Scraper:
 
         """
         current_directory = os.getcwd()
-        data_directory = os.path.join(current_directory, "raw_data")
+        data_directory = os.path.join(current_directory, self.raw_data_directory)
         product_directory = os.path.join(data_directory, product_ref)
         image_directory = os.path.join(product_directory, "images")
         Path(data_directory).mkdir(parents=True, exist_ok=True)
@@ -260,12 +263,12 @@ class Scraper:
             self.collect_product_data_and_store(url)
         return None
 
-    @staticmethod
-    def __delete_from_local_machine():
+    
+    def __delete_from_local_machine(self):
         """
         Removes the raw data from the local machine. 
         """
-        directory = os.path.join(os.getcwd(), "raw_data")
+        directory = os.path.join(os.getcwd(), self.raw_data_directory)
         print("Deleting", directory)
         shutil.rmtree(directory)
         return None
@@ -280,7 +283,9 @@ class Scraper:
         """
         s3_client = boto3.client('s3')
         print("Uploading data to s3 bucket ", bucket)
-        for subdirectories, directories, files in os.walk("/home/amy/Web-Scraping-Data-Pipeline/raw_data"):
+        data_directory = os.path.join(os.getcwd(), self.raw_data_directory)
+        print("Uploading ", data_directory, " to s3 bucket ", bucket)
+        for subdirectories, directories, files in os.walk(data_directory):
             for file in files:
                 full_path = os.path.join(subdirectories, file)
                 s3_client.upload_file(full_path, bucket, full_path)
