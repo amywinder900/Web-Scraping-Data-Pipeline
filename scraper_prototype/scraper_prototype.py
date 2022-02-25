@@ -240,6 +240,15 @@ class Scraper:
             Scraper.__download_image(local_file_location, image_src)
             i = +1
 
+    def upload_to_rds(self, data):
+        """
+        Uploads the data to an instance of Amazon relational database. 
+        """
+        #TODO tidy up method and complete docstring.
+        engine = create_engine("postgresql+psycopg2://postgres:yhEfXmpY4Xyqzfz@productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com:5432/postgres")
+        data_frame = pd.DataFrame([data])
+        data_frame.to_sql(self.raw_data_directory, engine, if_exists='append', index=False)
+
     def collect_product_data_and_store(self, url: str):
         """
         Collects the data for a product and stores it locally. 
@@ -253,6 +262,7 @@ class Scraper:
             data["product_ref"])
         Scraper.__save_data_to_file(data, product_directory)
         Scraper.__save_images_to_directory(data, image_directory)
+        self.upload_to_rds(data)
         return None
 
     def collect_all_data_and_store(self):
@@ -316,5 +326,4 @@ if __name__ == "__main__":
     gear4music.close_scraper()
     gear4music.upload_to_bucket('productwebscraper')
 
-# %%
 # %%
