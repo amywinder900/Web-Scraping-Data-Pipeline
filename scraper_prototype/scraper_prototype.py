@@ -8,6 +8,8 @@ import time
 import uuid
 import shutil
 import boto3
+import pandas as pd
+from sqlalchemy import create_engine
 from datetime import datetime
 from selenium import webdriver
 from pathlib import Path
@@ -30,8 +32,7 @@ class Scraper:
         """
         self.website_url = website_url
         self.driver = webdriver.Chrome()
-        self.raw_data_directory = datetime.today().strftime('%Y%m%d')+ '_raw_data'
-
+        self.raw_data_directory = datetime.today().strftime('%Y%m%d') + '_raw_data'
 
     def accept_cookies(self, xpath: str) -> None:
         """
@@ -58,7 +59,7 @@ class Scraper:
         Returns:
             page_list_of_product_urls(list): The list of the urls on the current page of the driver.
         """
-        time.sleep(2)
+        time.sleep(3)
         products = self.driver.find_elements_by_xpath(product_grid_xpath)
         page_list_of_product_urls = [
             product.get_attribute("href") for product in products]
@@ -174,22 +175,22 @@ class Scraper:
                 "sale": self.check_sale()}
         return data
 
-
-    def __create_directories(self,product_ref: str):
+    def __create_directories(self, product_ref: str):
         """
         Creates directories required to scrape data for a product.
 
 
         Args:
             product_ref(str): The reference number of the product.
-        
+
         Returns:
             product_directory(str): The path to the directory for the product. 
             image_director (str): The path to the directory for images related to the product.
 
         """
         current_directory = os.getcwd()
-        data_directory = os.path.join(current_directory, self.raw_data_directory)
+        data_directory = os.path.join(
+            current_directory, self.raw_data_directory)
         product_directory = os.path.join(data_directory, product_ref)
         image_directory = os.path.join(product_directory, "images")
         Path(data_directory).mkdir(parents=True, exist_ok=True)
@@ -248,7 +249,7 @@ class Scraper:
         """
         print("Collecting data for ", url)
         data = self.collect_data_for_product(url)
-        (product_directory, image_directory) = Scraper.__create_directories(
+        (product_directory, image_directory) = self.__create_directories(
             data["product_ref"])
         Scraper.__save_data_to_file(data, product_directory)
         Scraper.__save_images_to_directory(data, image_directory)
@@ -263,7 +264,6 @@ class Scraper:
             self.collect_product_data_and_store(url)
         return None
 
-    
     def __delete_from_local_machine(self):
         """
         Removes the raw data from the local machine. 
@@ -273,7 +273,7 @@ class Scraper:
         shutil.rmtree(directory)
         return None
 
-    def upload_to_bucket(self, bucket:str, delete_from_local:bool=True) -> None:
+    def upload_to_bucket(self, bucket: str, delete_from_local: bool = True) -> None:
         """
         Uploads the data to a bucket. 
 
@@ -285,12 +285,15 @@ class Scraper:
         print("Uploading data to s3 bucket ", bucket)
         data_directory = os.path.join(os.getcwd(), self.raw_data_directory)
         print("Uploading ", data_directory, " to s3 bucket ", bucket)
+        i = 0
         for subdirectories, directories, files in os.walk(data_directory):
+            i += 1
+            print("Uploading product number", i)
             for file in files:
                 full_path = os.path.join(subdirectories, file)
                 s3_client.upload_file(full_path, bucket, full_path)
         if delete_from_local == True:
-            Scraper.__delete_from_local_machine()
+            self.__delete_from_local_machine()
         return None
 
     def close_scraper(self):
@@ -308,9 +311,10 @@ if __name__ == "__main__":
     gear4music.accept_cookies(
         "//button[@id='banner-cookie-consent-allow-all']")
     gear4music.retrieve_product_links(
-        "https://www.gear4music.com/dj-equipment/scratch-dj/mixers", "//*[@class='g4m-grid-product-listing']/a")
+        "https://www.gear4music.com/dj-equipment/scratch-dj/vinyl", "//*[@class='g4m-grid-product-listing']/a")
     gear4music.collect_all_data_and_store()
     gear4music.close_scraper()
     gear4music.upload_to_bucket('productwebscraper')
 
+# %%
 # %%
