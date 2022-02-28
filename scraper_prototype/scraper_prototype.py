@@ -9,7 +9,7 @@ import uuid
 import shutil
 import boto3
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, table
 from datetime import datetime
 from selenium import webdriver
 from pathlib import Path
@@ -32,7 +32,8 @@ class Scraper:
         """
         self.website_url = website_url
         self.driver = webdriver.Chrome()
-        self.raw_data_directory = datetime.today().strftime('%Y%m%d') + '_raw_data'
+        self.raw_data_directory = 'raw_data_' + datetime.today().strftime('%Y%m%d')
+        self.image_database_name = 'image_' + datetime.today().strftime('%Y%m%d')
 
     def accept_cookies(self, xpath: str) -> None:
         """
@@ -240,14 +241,35 @@ class Scraper:
             Scraper.__download_image(local_file_location, image_src)
             i = +1
 
-    def upload_to_rds(self, data):
+    def __upload_to_rds(self, data:dict, table_name:str):
         """
         Uploads the data to an instance of Amazon relational database. 
+
+        Arguments: 
+            data(dict): The dictionary of data to be uploaded to the Amazon RDS. 
+            table_name(str): The name of the table to upload to. 
         """
-        #TODO tidy up method and complete docstring.
-        engine = create_engine("postgresql+psycopg2://postgres:yhEfXmpY4Xyqzfz@productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com:5432/postgres")
+        engine = create_engine(
+            "postgresql+psycopg2://postgres:yhEfXmpY4Xyqzfz@productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com:5432/postgres")
         data_frame = pd.DataFrame([data])
-        data_frame.to_sql(self.raw_data_directory, engine, if_exists='append', index=False)
+        data_frame.to_sql(table_name, engine,
+                          if_exists='append', index=False)
+        return None 
+
+    def __upload_image_data_to_rds(self, data:dict, image_directory:str):
+        """
+        Uploads information about the images to a Amazon relational database. 
+        """
+        i = 0
+        for image in data["images"]:
+            image_name = "image" + str(i) + ".jpg"
+            image_data = {
+                "image_uuid": str(uuid.uuid4()),
+                "product_uuid": data["product_uuid"],
+                "image_path": os.path.join(image_directory, image_name)
+            }
+            self.__upload_to_rds(image_data, self.image_database_name)
+        return None 
 
     def collect_product_data_and_store(self, url: str):
         """
@@ -262,7 +284,9 @@ class Scraper:
             data["product_ref"])
         Scraper.__save_data_to_file(data, product_directory)
         Scraper.__save_images_to_directory(data, image_directory)
-        self.upload_to_rds(data)
+        self.__upload_to_rds(data, self.raw_data_directory)
+        self.__upload_image_data_to_rds(data, image_directory)
+
         return None
 
     def collect_all_data_and_store(self):
@@ -311,6 +335,7 @@ class Scraper:
         Closes the windows associated with the scraper. 
         """
         self.driver.quit()
+        print("Quiting driver.")
 
         return None
 
