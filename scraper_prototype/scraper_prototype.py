@@ -9,6 +9,7 @@ import uuid
 import shutil
 import boto3
 import pandas as pd
+from sklearn.exceptions import DataDimensionalityWarning
 from sqlalchemy import create_engine, table
 from datetime import datetime
 from selenium import webdriver
@@ -153,7 +154,7 @@ class Scraper:
         images.insert(0, main_image)
         return images
 
-    def collect_data_for_product(self, product_url: str) -> dict:
+    def collect_product_data(self, product_url: str) -> dict:
         """
         Collects the data and image links for a given product.
 
@@ -163,17 +164,17 @@ class Scraper:
         Returns: 
             data(dict): The dictionary of data for the product.
         """
-        print("Collecting data from", product_url)
-        time.sleep(1)
         self.driver.get(product_url)
+        time.sleep(1)
         data = {"product_uuid": str(uuid.uuid4()),
                 "product_ref": self.driver.find_element_by_xpath("//p[@class='prd-ref']").text.split(":")[1].strip(),
                 "product_name": self.driver.find_element_by_xpath("//h1[@itemprop='name']").text,
                 "price": self.driver.find_element_by_xpath("//span[@class='c-val']").text,
                 "stock": self.check_stock(),
-                "description": self.driver.find_element_by_xpath("//div[@class='slide']").text.split(":", 1)[1],
+                "description": self.driver.find_element_by_xpath("//div[@class='slide']").text,
                 "images": self.collect_image_links(),
-                "sale": self.check_sale()}
+                "sale": self.check_sale()
+                }
         return data
 
     def __create_directories(self, product_ref: str):
@@ -279,13 +280,16 @@ class Scraper:
             url(str): The url for the product.
         """
         print("Collecting data for ", url)
-        data = self.collect_data_for_product(url)
+        data = self.collect_product_data(url)
+        print("Creating directories")
         (product_directory, image_directory) = self.__create_directories(
             data["product_ref"])
+        print("Saving to local machine.")
         Scraper.__save_data_to_file(data, product_directory)
         Scraper.__save_images_to_directory(data, image_directory)
-        self.__upload_to_rds(data, self.raw_data_directory)
-        self.__upload_image_data_to_rds(data, image_directory)
+        print("Uploading to RDS")
+        # self.__upload_to_rds(data, self.raw_data_directory)
+        # self.__upload_image_data_to_rds(data, image_directory)
 
         return None
 
@@ -294,8 +298,14 @@ class Scraper:
         Collects and stores the data for a list of product urls obtained by the scraper. 
         """
         print("Collecting data from URLs.")
+        i = 0 
         for url in self.list_of_product_urls:
-            self.collect_product_data_and_store(url)
+            print("Product number", i)
+            i+=1
+            try: 
+                self.collect_product_data_and_store(url)
+            except:
+                print("Data collection failted for this URl, skipping.")
         return None
 
     def __delete_from_local_machine(self):
@@ -346,7 +356,7 @@ if __name__ == "__main__":
     gear4music.accept_cookies(
         "//button[@id='banner-cookie-consent-allow-all']")
     gear4music.retrieve_product_links(
-        "https://www.gear4music.com/dj-equipment/scratch-dj/vinyl", "//*[@class='g4m-grid-product-listing']/a")
+        "https://www.gear4music.com/Microphones/Types.html", "//*[@class='g4m-grid-product-listing']/a")
     gear4music.collect_all_data_and_store()
     gear4music.close_scraper()
     gear4music.upload_to_bucket('productwebscraper')
