@@ -67,8 +67,10 @@ class Scraper:
             product.get_attribute("href") for product in products]
         return page_list_of_product_urls
 
-    def retrieve_product_links(self, product_url: str, product_grid_xpath: str) -> list:
+    def retrieve_product_links(self, product_url: str, product_grid_xpath: str, start_page) -> list:
         """
+        #TODO update docstring
+
         Retrieves the product links for the section of the website specified. 
 
         Arguments: 
@@ -79,12 +81,11 @@ class Scraper:
             list_of_product_urls(list): The list of urls for products of this type.
         """
         list_of_product_urls = []
-        i = 1
         unique_urls_collected = 0
-        while True:
-            print("Retriving links from page", i)
+        for page in range(start_page, start_page + 1):
+            print("Retriving links from page", page)
             url = product_url + \
-                "?page=" + str(i)
+                "?page=" + str(page)
             self.driver.get(url)
             new_product_urls = self.__retrieve_links_from_current_page(
                 product_grid_xpath)
@@ -97,7 +98,6 @@ class Scraper:
             if new_total_urls_collected == unique_urls_collected:
                 break
             else:
-                i += 1
                 unique_urls_collected = new_total_urls_collected
 
         self.list_of_product_urls = list_of_product_urls
@@ -236,13 +236,16 @@ class Scraper:
             data(dict): The data scraped from a product page.
         """
         i = 0
+        file_locations = []
         for image_src in data["images"]:
             file_name = "".join(("image", str(i), ".jpg"))
             local_file_location = os.path.join(image_directory, file_name)
+            file_locations.append(local_file_location)
             Scraper.__download_image(local_file_location, image_src)
             i = +1
+        return file_locations
 
-    def __upload_to_rds(self, data:dict, table_name:str):
+    def __upload_to_rds(self, data: dict, table_name: str):
         """
         Uploads the data to an instance of Amazon relational database. 
 
@@ -252,12 +255,12 @@ class Scraper:
         """
         engine = create_engine(
             "postgresql+psycopg2://postgres:yhEfXmpY4Xyqzfz@productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com:5432/postgres")
-        data_frame = pd.DataFrame([data])
+        data_frame = pd.DataFrame(data)
         data_frame.to_sql(table_name, engine,
                           if_exists='append', index=False)
-        return None 
+        return None
 
-    def __upload_image_data_to_rds(self, data:dict, image_directory:str):
+    def __upload_image_data_to_rds(self, data: dict, image_directory: str):
         """
         Uploads information about the images to a Amazon relational database. 
         """
@@ -270,7 +273,7 @@ class Scraper:
                 "image_path": os.path.join(image_directory, image_name)
             }
             self.__upload_to_rds(image_data, self.image_database_name)
-        return None 
+        return None
 
     def collect_product_data_and_store(self, url: str):
         """
@@ -286,26 +289,71 @@ class Scraper:
             data["product_ref"])
         print("Saving to local machine.")
         Scraper.__save_data_to_file(data, product_directory)
-        Scraper.__save_images_to_directory(data, image_directory)
-        print("Uploading to RDS")
-        # self.__upload_to_rds(data, self.raw_data_directory)
-        # self.__upload_image_data_to_rds(data, image_directory)
-
-        return None
+        image_file_locations = Scraper.__save_images_to_directory(
+            data, image_directory)
+        image_database_dictionary = {
+            "image_location": image_file_locations,
+            "product_uuid": [data["product_uuid"]]*len(image_file_locations)
+        }
+        return data, image_database_dictionary
 
     def collect_all_data_and_store(self):
         """
         Collects and stores the data for a list of product urls obtained by the scraper. 
         """
         print("Collecting data from URLs.")
-        i = 0 
+        i = 1
+        # initalise lists for raw data database
+        list_of_product_uuid = []
+        list_of_product_ref = []
+        list_of_product_name = []
+        list_of_price = []
+        list_of_stock = []
+        list_of_description = []
+        list_of_images = []
+        list_of_sale = []
+        # initalise lists for image database
+        list_of_image_locations = []
+        list_of_product_uuid_for_image_database = []
+
         for url in self.list_of_product_urls:
             print("Product number", i)
-            i+=1
-            try: 
-                self.collect_product_data_and_store(url)
+            i += 1
+            try:
+                data, image_database_dictionary = self.collect_product_data_and_store(
+                    url)
+                list_of_product_uuid.append(data["product_uuid"])
+                list_of_product_ref.append(data["product_ref"])
+                list_of_product_name.append(data["product_name"])
+                list_of_price.append(data["price"])
+                list_of_stock.append(data["stock"])
+                list_of_description.append(data["description"])
+                list_of_images.append(data["images"])
+                list_of_sale.append(data["sale"])
+
+                list_of_image_locations.extend(
+                    image_database_dictionary["image_location"])
+                list_of_product_uuid_for_image_database.extend(
+                    image_database_dictionary["product_uuid"])
             except:
-                print("Data collection failted for this URl, skipping.")
+                print("Data collection failted for this URL, skipping.")
+
+        dictionary_of_data = {"product_uuid": list_of_product_uuid,
+                              "product_ref": list_of_product_ref,
+                              "product_name": list_of_product_name,
+                              "price": list_of_price,
+                              "stock": list_of_stock,
+                              "description": list_of_description,
+                              "images": list_of_images,
+                              "sale": list_of_sale
+                              }
+        dictionary_of_image_data = {"image_location": list_of_image_locations,
+                                    "product_uuid": list_of_product_uuid_for_image_database
+                                    }
+
+        print("Uploading to RDS")
+        self.__upload_to_rds(dictionary_of_data, self.raw_data_directory)
+        self.__upload_to_rds(dictionary_of_image_data, self.image_database_name)
         return None
 
     def __delete_from_local_machine(self):
@@ -332,7 +380,7 @@ class Scraper:
         i = 0
         for subdirectories, directories, files in os.walk(data_directory):
             i += 1
-            print("Uploading product number", i)
+            print("Uploading file number", i)
             for file in files:
                 full_path = os.path.join(subdirectories, file)
                 s3_client.upload_file(full_path, bucket, full_path)
@@ -356,9 +404,19 @@ if __name__ == "__main__":
     gear4music.accept_cookies(
         "//button[@id='banner-cookie-consent-allow-all']")
     gear4music.retrieve_product_links(
-        "https://www.gear4music.com/Microphones/Types.html", "//*[@class='g4m-grid-product-listing']/a")
+        "https://www.gear4music.com/Microphones/Types.html", "//*[@class='g4m-grid-product-listing']/a", 1)
     gear4music.collect_all_data_and_store()
     gear4music.close_scraper()
     gear4music.upload_to_bucket('productwebscraper')
 
+# %%
+
+
+data = {"hello": [1, 2, 3], "world": ["one", "two", "three"]}
+
+engine = create_engine(
+    "postgresql+psycopg2://postgres:yhEfXmpY4Xyqzfz@productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com:5432/postgres")
+data_frame = pd.DataFrame(data)
+data_frame.to_sql("table1", engine,
+                  if_exists='append', index=False)
 # %%
