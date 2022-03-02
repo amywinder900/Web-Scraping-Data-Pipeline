@@ -3,6 +3,7 @@
 from gc import collect
 import os
 import json
+from tokenize import String
 import requests
 import time
 import uuid
@@ -10,6 +11,7 @@ import shutil
 import boto3
 import numpy as np
 import pandas as pd
+from psycopg2 import sql
 from sklearn.exceptions import DataDimensionalityWarning
 from sqlalchemy import create_engine, table
 from datetime import datetime
@@ -34,8 +36,22 @@ class Scraper:
         """
         self.website_url = website_url
         self.driver = webdriver.Chrome()
-        self.raw_data_directory = 'raw_data_' + datetime.today().strftime('%Y%m%d')
-        self.image_database_name = 'image_' + datetime.today().strftime('%Y%m%d')
+        self.raw_data_directory = 'raw_data'
+        self.image_database_name = 'image'
+        self.engine = create_engine(
+            "postgresql+psycopg2://postgres:yhEfXmpY4Xyqzfz@productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com:5432/postgres")
+        self.engine.execute('''  CREATE TABLE if not exists raw_data(
+                                    product_uuid TEXT, 
+                                    product_ref TEXT,
+                                    product_name TEXT,
+                                    price TEXT,
+                                    stock TEXT,
+                                    description TEXT,
+                                    images TEXT,
+                                    sale TEXT);
+						        CREATE TABLE if not exists image (
+						            image_location TEXT,
+					            	product_uuid TEXT);''')
 
     def accept_cookies(self, xpath: str) -> None:
         """
@@ -238,12 +254,22 @@ class Scraper:
             data(dict): The dictionary of data to be uploaded to the Amazon RDS. 
             table_name(str): The name of the table to upload to. 
         """
-        engine = create_engine(
-            "postgresql+psycopg2://postgres:yhEfXmpY4Xyqzfz@productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com:5432/postgres")
+
         data_frame = pd.DataFrame(data)
-        data_frame.to_sql(table_name, engine,
+        data_frame.to_sql(table_name, self.engine,
                           if_exists='append', index=False)
         return None
+
+    def __check_database_for_existing_products(self, product_ref:str) -> bool:
+        """
+        Checks if the product has already been entered on the database. 
+        """
+        sql_query = """select product_ref from raw_data where product_ref = %(product_ref)s """
+        table = pd.read_sql_query(sql_query, self.engine, params = {"product_ref":product_ref})
+        downloaded = True
+        if table.empty: 
+            downloaded = False
+        return downloaded
 
     def collect_product_data_and_store(self, url: str):
         """
@@ -254,6 +280,11 @@ class Scraper:
         """
         print("Collecting data for ", url)
         data = self.collect_product_data(url)
+        #checks if the product already exists in the database
+        if self.__check_database_for_existing_products(data["product_ref"]): 
+            print("Already downloaded, skipping.")
+            return None, None
+
         print("Creating directories")
         (product_directory, image_directory) = self.__create_directories(
             data["product_ref"])
@@ -266,6 +297,7 @@ class Scraper:
             "product_uuid": [data["product_uuid"]]*len(image_file_locations)
         }
         return data, image_database_dictionary
+    
 
     def collect_all_data_and_store(self, list_of_product_urls: list):
         """
@@ -289,9 +321,13 @@ class Scraper:
         for url in list_of_product_urls:
             print("Product number", i)
             i += 1
-            try:
-                data, image_database_dictionary = self.collect_product_data_and_store(
-                    url)
+            # try:
+            data, image_database_dictionary = self.collect_product_data_and_store(
+                url)
+            
+            if data == None:
+                continue
+            else:
                 list_of_product_uuid.append(data["product_uuid"])
                 list_of_product_ref.append(data["product_ref"])
                 list_of_product_name.append(data["product_name"])
@@ -305,8 +341,8 @@ class Scraper:
                     image_database_dictionary["image_location"])
                 list_of_product_uuid_for_image_database.extend(
                     image_database_dictionary["product_uuid"])
-            except:
-                print("Data collection failted for this URL, skipping.")
+            # except:
+            #     print("Data collection failed for this URL, skipping.")
 
         # add data to dictionaries
         dictionary_of_data = {"product_uuid": list_of_product_uuid,
@@ -334,7 +370,10 @@ class Scraper:
         """
         directory = os.path.join(os.getcwd(), self.raw_data_directory)
         print("Deleting", directory)
-        shutil.rmtree(directory)
+        try:
+            shutil.rmtree(directory)
+        except FileNotFoundError: 
+            print("Can't find directory to delete.")
         return None
 
     def upload_to_bucket(self, bucket: str, delete_from_local: bool = True) -> None:
@@ -421,4 +460,14 @@ if __name__ == "__main__":
     gear4music.close_scraper()
     gear4music.upload_to_bucket('productwebscraper')
 
+# %%
+
+engine = create_engine(
+    "postgresql+psycopg2://postgres:yhEfXmpY4Xyqzfz@productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com:5432/postgres")
+sql_query = """select product_ref from raw_data where product_ref = %(product_ref)s """
+table = pd.read_sql_query(sql_query, engine, params = {"product_ref":'3'})
+downloaded = True
+if table.empty: 
+    downloaded = False
+print(downloaded)
 # %%
