@@ -8,6 +8,7 @@ import time
 import uuid
 import shutil
 import boto3
+import numpy as np
 import pandas as pd
 from sklearn.exceptions import DataDimensionalityWarning
 from sqlalchemy import create_engine, table
@@ -67,40 +68,24 @@ class Scraper:
             product.get_attribute("href") for product in products]
         return page_list_of_product_urls
 
-    def retrieve_product_links(self, product_url: str, product_grid_xpath: str, start_page) -> list:
+    def retrieve_product_links(self, product_url: str, product_grid_xpath: str, page: int) -> list:
         """
-        #TODO update docstring
-
         Retrieves the product links for the section of the website specified. 
 
         Arguments: 
             product_url(str): The URL for the section of the website to be scraped. 
             product_grid_xpath(str): The xpath for the container which holds the products.  
+            page(int): The page number to scrape data from. 
 
         Returns:
             list_of_product_urls(list): The list of urls for products of this type.
         """
-        list_of_product_urls = []
-        unique_urls_collected = 0
-        for page in range(start_page, start_page + 1):
-            print("Retriving links from page", page)
-            url = product_url + \
-                "?page=" + str(page)
-            self.driver.get(url)
-            new_product_urls = self.__retrieve_links_from_current_page(
-                product_grid_xpath)
-            list_of_product_urls.extend(new_product_urls)
-            # Removes duplicates from the list of urls
-            list_of_product_urls = [i for n, i in enumerate(
-                list_of_product_urls)if i not in list_of_product_urls[:n]]
-            # Stops the loop if no new product urls have been collected
-            new_total_urls_collected = len(list_of_product_urls)
-            if new_total_urls_collected == unique_urls_collected:
-                break
-            else:
-                unique_urls_collected = new_total_urls_collected
-
-        self.list_of_product_urls = list_of_product_urls
+        print("Retriving links from page", page)
+        url = product_url + \
+            "?page=" + str(page)
+        self.driver.get(url)
+        list_of_product_urls = self.__retrieve_links_from_current_page(
+            product_grid_xpath)
 
         return list_of_product_urls
 
@@ -260,21 +245,6 @@ class Scraper:
                           if_exists='append', index=False)
         return None
 
-    def __upload_image_data_to_rds(self, data: dict, image_directory: str):
-        """
-        Uploads information about the images to a Amazon relational database. 
-        """
-        i = 0
-        for image in data["images"]:
-            image_name = "image" + str(i) + ".jpg"
-            image_data = {
-                "image_uuid": str(uuid.uuid4()),
-                "product_uuid": data["product_uuid"],
-                "image_path": os.path.join(image_directory, image_name)
-            }
-            self.__upload_to_rds(image_data, self.image_database_name)
-        return None
-
     def collect_product_data_and_store(self, url: str):
         """
         Collects the data for a product and stores it locally. 
@@ -297,7 +267,7 @@ class Scraper:
         }
         return data, image_database_dictionary
 
-    def collect_all_data_and_store(self):
+    def collect_all_data_and_store(self, list_of_product_urls: list):
         """
         Collects and stores the data for a list of product urls obtained by the scraper. 
         """
@@ -316,7 +286,7 @@ class Scraper:
         list_of_image_locations = []
         list_of_product_uuid_for_image_database = []
 
-        for url in self.list_of_product_urls:
+        for url in list_of_product_urls:
             print("Product number", i)
             i += 1
             try:
@@ -338,6 +308,7 @@ class Scraper:
             except:
                 print("Data collection failted for this URL, skipping.")
 
+        # add data to dictionaries
         dictionary_of_data = {"product_uuid": list_of_product_uuid,
                               "product_ref": list_of_product_ref,
                               "product_name": list_of_product_name,
@@ -353,7 +324,8 @@ class Scraper:
 
         print("Uploading to RDS")
         self.__upload_to_rds(dictionary_of_data, self.raw_data_directory)
-        self.__upload_to_rds(dictionary_of_image_data, self.image_database_name)
+        self.__upload_to_rds(dictionary_of_image_data,
+                             self.image_database_name)
         return None
 
     def __delete_from_local_machine(self):
@@ -374,18 +346,58 @@ class Scraper:
             delete_from_local(bool): If true then the method will delete the raw data file from the local machine. True by default.
         """
         s3_client = boto3.client('s3')
-        print("Uploading data to s3 bucket ", bucket)
-        data_directory = os.path.join(os.getcwd(), self.raw_data_directory)
-        print("Uploading ", data_directory, " to s3 bucket ", bucket)
-        i = 0
-        for subdirectories, directories, files in os.walk(data_directory):
-            i += 1
-            print("Uploading file number", i)
-            for file in files:
-                full_path = os.path.join(subdirectories, file)
-                s3_client.upload_file(full_path, bucket, full_path)
+        print("Uploading data to s3 bucket ", bucket,
+              " is currently disabled to preserve resources.")
+        # FIXME uncomment this method before deploying
+        # data_directory = os.path.join(os.getcwd(), self.raw_data_directory)
+        # print("Uploading ", data_directory, " to s3 bucket ", bucket)
+        # i = 0
+        # for subdirectories, directories, files in os.walk(data_directory):
+        #     i += 1
+        #     print("Uploading file number", i)
+        #     for file in files:
+        #         full_path = os.path.join(subdirectories, file)
+        #         s3_client.upload_file(full_path, bucket, full_path)
         if delete_from_local == True:
             self.__delete_from_local_machine()
+        return None
+
+    def __check_total_number_of_pages(self, pages: int, product_url: str) -> int:
+        """
+        Checks how many pages are avaliable to scrape for the product. 
+
+        Arguments:
+            pages(int): The number of pages to be checked by the scraper
+            product_url(str): The url of the product to be scraped. 
+
+        Returns: 
+            pages(int): The number of pages to be checked by the scraper, which is less than or equal to the total number of pages avaliable. 
+        """
+
+        self.driver.get(product_url)
+        number_of_products = self.driver.find_elements_by_xpath(
+            "//p[@data-test='plp-product-listing-count-message']/span")
+        pages_avaliable = int(
+            np.ceil(int(number_of_products[1].text)/int(number_of_products[0].text)))
+        if pages_avaliable < pages:
+            pages = pages_avaliable
+            print("There are ", pages, " pages avalible to scrape.")
+        return pages
+
+    def run_scraper(self, pages: int, product_url: str):
+        """
+        Method to run the webscraper over a a given number of pages for a product.
+
+        Arguments:
+            pages(int): The number of pages to run the scraper over. 
+            product_url(str): The url of the product to scrape. 
+        """
+        pages = self.__check_total_number_of_pages(pages, product_url)
+
+        for i in range(1, pages+1):
+            list_of_product_urls = self.retrieve_product_links(
+                product_url, "//*[@class='g4m-grid-product-listing']/a", i)
+            self.collect_all_data_and_store(list_of_product_urls)
         return None
 
     def close_scraper(self):
@@ -403,20 +415,10 @@ if __name__ == "__main__":
     gear4music = Scraper("https://www.gear4music.com")
     gear4music.accept_cookies(
         "//button[@id='banner-cookie-consent-allow-all']")
-    gear4music.retrieve_product_links(
-        "https://www.gear4music.com/Microphones/Types.html", "//*[@class='g4m-grid-product-listing']/a", 1)
-    gear4music.collect_all_data_and_store()
+    gear4music.run_scraper(
+        2, "https://www.gear4music.com/dj-equipment/scratch-dj/mixers")
+# "https://www.gear4music.com/Microphones/Types.html"
     gear4music.close_scraper()
     gear4music.upload_to_bucket('productwebscraper')
 
-# %%
-
-
-data = {"hello": [1, 2, 3], "world": ["one", "two", "three"]}
-
-engine = create_engine(
-    "postgresql+psycopg2://postgres:yhEfXmpY4Xyqzfz@productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com:5432/postgres")
-data_frame = pd.DataFrame(data)
-data_frame.to_sql("table1", engine,
-                  if_exists='append', index=False)
 # %%
