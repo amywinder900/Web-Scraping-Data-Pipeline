@@ -18,6 +18,7 @@ from datetime import datetime
 from selenium import webdriver
 from pathlib import Path
 from selenium.webdriver.remote.webelement import WebElement
+from selenium.common.exceptions import NoSuchElementException
 # %%
 
 
@@ -49,48 +50,27 @@ class Scraper:
                                     description TEXT,
                                     images TEXT,
                                     sale TEXT);
-						        CREATE TABLE if not exists image (
+						        CREATE TABLE if not exists images(
 						            image_location TEXT,
 					            	product_uuid TEXT);''')
 
-    def accept_cookies(self, xpath: str) -> None:
+    def accept_cookies(self,) -> None:
         """
         A method which loads the website and accepts cookies for a given xpath. 
-
-        Arguments: 
-            xpath(str): The xpath of the accept cookies
         """
         print("Accepting cookies")
         self.driver.get(self.website_url)
         time.sleep(2)
-        accept_cookies_button = self.driver.find_element_by_xpath(xpath)
+        accept_cookies_button = self.driver.find_element_by_xpath("//button[@id='banner-cookie-consent-allow-all']")
         accept_cookies_button.click()
         return None
 
-    def __retrieve_links_from_current_page(self, product_grid_xpath: str) -> list:
-        """
-        A private method which retrieves links from the driver's current page.
-
-        Arguments:
-            product_grid_xpath (str): The xpath for the container which holds the products.  
-
-
-        Returns:
-            page_list_of_product_urls(list): The list of the urls on the current page of the driver.
-        """
-        time.sleep(3)
-        products = self.driver.find_elements_by_xpath(product_grid_xpath)
-        page_list_of_product_urls = [
-            product.get_attribute("href") for product in products]
-        return page_list_of_product_urls
-
-    def retrieve_product_links(self, product_url: str, product_grid_xpath: str, page: int) -> list:
+    def retrieve_product_links(self, product_url: str, page: int) -> list:
         """
         Retrieves the product links for the section of the website specified. 
 
         Arguments: 
             product_url(str): The URL for the section of the website to be scraped. 
-            product_grid_xpath(str): The xpath for the container which holds the products.  
             page(int): The page number to scrape data from. 
 
         Returns:
@@ -100,9 +80,11 @@ class Scraper:
         url = product_url + \
             "?page=" + str(page)
         self.driver.get(url)
-        list_of_product_urls = self.__retrieve_links_from_current_page(
-            product_grid_xpath)
-
+        time.sleep(3)
+        products = self.driver.find_elements_by_xpath(
+            "//*[@class='g4m-grid-product-listing']/a")
+        list_of_product_urls = [product.get_attribute(
+            "href") for product in products]
         return list_of_product_urls
 
     def check_stock(self) -> str:
@@ -134,12 +116,12 @@ class Scraper:
         for message in special_messages:
             if message.text == "SALE":
                 sale = True
+
         return sale
 
     def collect_image_links(self) -> list:
         """
         This method retrieves the links for the images of a product. 
-
 
         Returns:
             images(list): The links to the images of the product on the webdriver's current page.
@@ -153,6 +135,7 @@ class Scraper:
         images = [image.get_attribute(
             "href") for image in other_images_container]
         images.insert(0, main_image)
+
         return images
 
     def collect_product_data(self, product_url: str) -> dict:
@@ -176,12 +159,12 @@ class Scraper:
                 "images": self.collect_image_links(),
                 "sale": self.check_sale()
                 }
+
         return data
 
     def __create_directories(self, product_ref: str):
         """
         Creates directories required to scrape data for a product.
-
 
         Args:
             product_ref(str): The reference number of the product.
@@ -198,6 +181,7 @@ class Scraper:
         image_directory = os.path.join(product_directory, "images")
         Path(data_directory).mkdir(parents=True, exist_ok=True)
         Path(image_directory).mkdir(parents=True, exist_ok=True)
+
         return (product_directory, image_directory)
 
     @staticmethod
@@ -229,12 +213,15 @@ class Scraper:
         return None
 
     @staticmethod
-    def __save_images_to_directory(data: dict, image_directory: str):
+    def __save_images_to_directory(data: dict, image_directory: str) -> dict:
         """
         Retrieves all the image files for data scraped from a product page. 
 
         Args:
             data(dict): The data scraped from a product page.
+
+        Returns:
+            image_database_dictionary(dict): A dictionary of data about the file locations. 
         """
         i = 0
         file_locations = []
@@ -244,7 +231,14 @@ class Scraper:
             file_locations.append(local_file_location)
             Scraper.__download_image(local_file_location, image_src)
             i = +1
-        return file_locations
+
+        # creates a dictionary of data about file locations
+        image_database_dictionary = {
+            "image_location": file_locations,
+            "product_uuid": [data["product_uuid"]]*len(file_locations)
+        }
+
+        return image_database_dictionary
 
     def __upload_to_rds(self, data: dict, table_name: str):
         """
@@ -260,14 +254,18 @@ class Scraper:
                           if_exists='append', index=False)
         return None
 
-    def __check_database_for_existing_products(self, product_ref:str) -> bool:
+    def __check_if_exists_on_database(self, product_ref: str) -> bool:
         """
         Checks if the product has already been entered on the database. 
+
+        Returns:
+            downloaded(bool): The method will return True if the product reference matches one already in the database.
         """
         sql_query = """select product_ref from raw_data where product_ref = %(product_ref)s """
-        table = pd.read_sql_query(sql_query, self.engine, params = {"product_ref":product_ref})
+        table = pd.read_sql_query(sql_query, self.engine, params={
+                                  "product_ref": product_ref})
         downloaded = True
-        if table.empty: 
+        if table.empty:
             downloaded = False
         return downloaded
 
@@ -277,27 +275,29 @@ class Scraper:
 
         Arguments:
             url(str): The url for the product.
+
+        Returns: 
+            data(dict): The product data. Will return None if the product has already been scraped. 
+            image_database_dictionary(dict): A dictionary containing file locations and the associated product uuid. 
         """
         print("Collecting data for ", url)
         data = self.collect_product_data(url)
-        #checks if the product already exists in the database
-        if self.__check_database_for_existing_products(data["product_ref"]): 
+
+        # checks if the product already exists in the database
+        if self.__check_if_exists_on_database(data["product_ref"]):
             print("Already downloaded, skipping.")
             return None, None
 
         print("Creating directories")
         (product_directory, image_directory) = self.__create_directories(
             data["product_ref"])
+
         print("Saving to local machine.")
         Scraper.__save_data_to_file(data, product_directory)
-        image_file_locations = Scraper.__save_images_to_directory(
+        image_database_dictionary = Scraper.__save_images_to_directory(
             data, image_directory)
-        image_database_dictionary = {
-            "image_location": image_file_locations,
-            "product_uuid": [data["product_uuid"]]*len(image_file_locations)
-        }
+
         return data, image_database_dictionary
-    
 
     def collect_all_data_and_store(self, list_of_product_urls: list):
         """
@@ -318,31 +318,33 @@ class Scraper:
         list_of_image_locations = []
         list_of_product_uuid_for_image_database = []
 
+        # collects the data from the list of urls
         for url in list_of_product_urls:
             print("Product number", i)
             i += 1
-            # try:
             data, image_database_dictionary = self.collect_product_data_and_store(
                 url)
-            
+
             if data == None:
                 continue
             else:
-                list_of_product_uuid.append(data["product_uuid"])
-                list_of_product_ref.append(data["product_ref"])
-                list_of_product_name.append(data["product_name"])
-                list_of_price.append(data["price"])
-                list_of_stock.append(data["stock"])
-                list_of_description.append(data["description"])
-                list_of_images.append(data["images"])
-                list_of_sale.append(data["sale"])
+                try:
+                    list_of_product_uuid.append(data["product_uuid"])
+                    list_of_product_ref.append(data["product_ref"])
+                    list_of_product_name.append(data["product_name"])
+                    list_of_price.append(data["price"])
+                    list_of_stock.append(data["stock"])
+                    list_of_description.append(data["description"])
+                    list_of_images.append(data["images"])
+                    list_of_sale.append(data["sale"])
 
-                list_of_image_locations.extend(
-                    image_database_dictionary["image_location"])
-                list_of_product_uuid_for_image_database.extend(
-                    image_database_dictionary["product_uuid"])
-            # except:
-            #     print("Data collection failed for this URL, skipping.")
+                    list_of_image_locations.extend(
+                        image_database_dictionary["image_location"])
+                    list_of_product_uuid_for_image_database.extend(
+                        image_database_dictionary["product_uuid"])
+
+                except NoSuchElementException:
+                    print("Data collection failed for this URL, skipping.")
 
         # add data to dictionaries
         dictionary_of_data = {"product_uuid": list_of_product_uuid,
@@ -372,7 +374,7 @@ class Scraper:
         print("Deleting", directory)
         try:
             shutil.rmtree(directory)
-        except FileNotFoundError: 
+        except FileNotFoundError:
             print("Can't find directory to delete.")
         return None
 
@@ -423,7 +425,7 @@ class Scraper:
             print("There are ", pages, " pages avalible to scrape.")
         return pages
 
-    def run_scraper(self, pages: int, product_url: str):
+    def run_scraper(self, pages: int, product_url: str) -> None:
         """
         Method to run the webscraper over a a given number of pages for a product.
 
@@ -435,7 +437,7 @@ class Scraper:
 
         for i in range(1, pages+1):
             list_of_product_urls = self.retrieve_product_links(
-                product_url, "//*[@class='g4m-grid-product-listing']/a", i)
+                product_url, i)
             self.collect_all_data_and_store(list_of_product_urls)
         return None
 
@@ -452,22 +454,11 @@ class Scraper:
 # %%
 if __name__ == "__main__":
     gear4music = Scraper("https://www.gear4music.com")
-    gear4music.accept_cookies(
-        "//button[@id='banner-cookie-consent-allow-all']")
+    gear4music.accept_cookies()
     gear4music.run_scraper(
-        2, "https://www.gear4music.com/dj-equipment/scratch-dj/mixers")
-# "https://www.gear4music.com/Microphones/Types.html"
+        1,
+        "https://www.gear4music.com/Microphones/Types.html")
     gear4music.close_scraper()
     gear4music.upload_to_bucket('productwebscraper')
 
-# %%
-
-engine = create_engine(
-    "postgresql+psycopg2://postgres:yhEfXmpY4Xyqzfz@productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com:5432/postgres")
-sql_query = """select product_ref from raw_data where product_ref = %(product_ref)s """
-table = pd.read_sql_query(sql_query, engine, params = {"product_ref":'3'})
-downloaded = True
-if table.empty: 
-    downloaded = False
-print(downloaded)
 # %%
