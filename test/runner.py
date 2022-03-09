@@ -1,6 +1,6 @@
 
 import unittest
-from test import test_scraper_prototype
+import test_scraper_prototype
 
 # initialize the test suite
 loader = unittest.TestLoader()

@@ -19,6 +19,7 @@ from selenium import webdriver
 from pathlib import Path
 from selenium.webdriver.remote.webelement import WebElement
 from selenium.common.exceptions import NoSuchElementException
+from selenium.webdriver.chrome.options import Options
 # %%
 
 
@@ -35,8 +36,12 @@ class Scraper:
         """
         See help(Scraper)
         """
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+
         self.website_url = website_url
-        self.driver = webdriver.Chrome()
+
+        self.driver = webdriver.Chrome(options=chrome_options)
         self.raw_data_directory = 'raw_data'
         self.image_database_name = 'image'
         self.engine = create_engine(
