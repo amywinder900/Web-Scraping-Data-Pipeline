@@ -1,9 +1,7 @@
 
 # %%
-from gc import collect
 import os
 import json
-from tokenize import String
 import requests
 import time
 import uuid
@@ -11,16 +9,16 @@ import shutil
 import boto3
 import numpy as np
 import pandas as pd
-from psycopg2 import sql
-from sklearn.exceptions import DataDimensionalityWarning
-from sqlalchemy import create_engine, table
-from datetime import datetime
+from sqlalchemy import create_engine
 from selenium import webdriver
 from pathlib import Path
-from selenium.webdriver.remote.webelement import WebElement
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+
 # %%
+
 
 
 class Scraper:
@@ -36,12 +34,15 @@ class Scraper:
         """
         See help(Scraper)
         """
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")
-
+        options = Options()
+        options.add_argument("--headless")
+        options.add_argument("--headless") # Runs Chrome in headless mode.
+        options.add_argument('--no-sandbox') # # Bypass OS security model
+        options.add_argument('start-maximized')
+        options.add_argument('disable-infobars')
+        options.add_argument("--disable-extensions")
         self.website_url = website_url
-
-        self.driver = webdriver.Chrome(options=chrome_options)
+        self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), chrome_options=options)
         self.raw_data_directory = 'raw_data'
         self.image_database_name = 'image'
         self.engine = create_engine(
@@ -59,14 +60,15 @@ class Scraper:
 						            image_location TEXT,
 					            	product_uuid TEXT);''')
 
-    def accept_cookies(self,) -> None:
+    def accept_cookies(self) -> None:
         """
         A method which loads the website and accepts cookies for a given xpath. 
         """
         print("Accepting cookies")
         self.driver.get(self.website_url)
         time.sleep(2)
-        accept_cookies_button = self.driver.find_element_by_xpath("//button[@id='banner-cookie-consent-allow-all']")
+        accept_cookies_button = self.driver.find_element_by_xpath(
+            "//button[@id='banner-cookie-consent-allow-all']")
         accept_cookies_button.click()
         return None
 
