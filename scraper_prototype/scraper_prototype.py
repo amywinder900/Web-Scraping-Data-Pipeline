@@ -14,6 +14,7 @@ from selenium import webdriver
 from pathlib import Path
 from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
@@ -35,18 +36,25 @@ class Scraper:
         See help(Scraper)
         """
         options = Options()
-        options.add_argument("--headless")
         options.add_argument("--headless") # Runs Chrome in headless mode.
-        options.add_argument('--no-sandbox') # # Bypass OS security model
-        options.add_argument('start-maximized')
-        options.add_argument('disable-infobars')
-        options.add_argument("--disable-extensions")
+        #options.add_argument('--no-sandbox') # # Bypass OS security model
+        #options.add_argument('start-maximized')
+        #options.add_argument('disable-infobars')
+        #options.add_argument("--disable-extensions")
         self.website_url = website_url
         self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), chrome_options=options)
         self.raw_data_directory = 'raw_data'
-        self.image_database_name = 'image'
-        self.engine = create_engine(
-            "postgresql+psycopg2://postgres:yhEfXmpY4Xyqzfz@productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com:5432/postgres")
+        self.image_database_name = 'images'
+
+        #sets up database
+        DATABASE_TYPE = 'postgresql'
+        DBAPI = 'psycopg2'
+        ENDPOINT = 'productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com' 
+        USER = 'postgres'
+        PASSWORD = input("Enter RDS password:")
+        PORT = 5432
+        DATABASE = 'postgres'
+        self.engine = create_engine(f"{DATABASE_TYPE}+{DBAPI}://{USER}:{PASSWORD}@{ENDPOINT}:{PORT}/{DATABASE}")
         self.engine.execute('''  CREATE TABLE if not exists raw_data(
                                     product_uuid TEXT, 
                                     product_ref TEXT,
@@ -67,7 +75,7 @@ class Scraper:
         print("Accepting cookies")
         self.driver.get(self.website_url)
         time.sleep(2)
-        accept_cookies_button = self.driver.find_element_by_xpath(
+        accept_cookies_button = self.driver.find_element(by=By.XPATH, value =
             "//button[@id='banner-cookie-consent-allow-all']")
         accept_cookies_button.click()
         return None
@@ -133,7 +141,7 @@ class Scraper:
         Returns:
             images(list): The links to the images of the product on the webdriver's current page.
         """
-        main_image = self.driver.find_element_by_xpath(
+        main_image = self.driver.find_element(by=By.XPATH, value =
             "//img[@class='main-image']"
         ).get_attribute("src")
         other_images_container = self.driver.find_elements_by_xpath(
@@ -158,11 +166,11 @@ class Scraper:
         self.driver.get(product_url)
         time.sleep(1)
         data = {"product_uuid": str(uuid.uuid4()),
-                "product_ref": self.driver.find_element_by_xpath("//p[@class='prd-ref']").text.split(":")[1].strip(),
-                "product_name": self.driver.find_element_by_xpath("//h1[@itemprop='name']").text,
-                "price": self.driver.find_element_by_xpath("//span[@class='c-val']").text,
+                "product_ref": self.driver.find_element(by=By.XPATH, value ="//p[@class='prd-ref']").text.split(":")[1].strip(),
+                "product_name": self.driver.find_element(by=By.XPATH, value ="//h1[@itemprop='name']").text,
+                "price": self.driver.find_element(by=By.XPATH, value ="//span[@class='c-val']").text,
                 "stock": self.check_stock(),
-                "description": self.driver.find_element_by_xpath("//div[@class='slide']").text,
+                "description": self.driver.find_element(by=By.XPATH, value ="//div[@class='slide']").text,
                 "images": self.collect_image_links(),
                 "sale": self.check_sale()
                 }
@@ -394,18 +402,15 @@ class Scraper:
             delete_from_local(bool): If true then the method will delete the raw data file from the local machine. True by default.
         """
         s3_client = boto3.client('s3')
-        print("Uploading data to s3 bucket ", bucket,
-              " is currently disabled to preserve resources.")
-        # FIXME uncomment this method before deploying
-        # data_directory = os.path.join(os.getcwd(), self.raw_data_directory)
-        # print("Uploading ", data_directory, " to s3 bucket ", bucket)
-        # i = 0
-        # for subdirectories, directories, files in os.walk(data_directory):
-        #     i += 1
-        #     print("Uploading file number", i)
-        #     for file in files:
-        #         full_path = os.path.join(subdirectories, file)
-        #         s3_client.upload_file(full_path, bucket, full_path)
+        data_directory = os.path.join(os.getcwd(), self.raw_data_directory)
+        print("Uploading ", data_directory, " to s3 bucket ", bucket)
+        i = 0
+        for subdirectories, directories, files in os.walk(data_directory):
+            i += 1
+            print("Uploading file number", i)
+            for file in files:
+                full_path = os.path.join(subdirectories, file)
+                s3_client.upload_file(full_path, bucket, full_path)
         if delete_from_local == True:
             self.__delete_from_local_machine()
         return None
@@ -466,6 +471,6 @@ if __name__ == "__main__":
         1,
         "https://www.gear4music.com/Microphones/Types.html")
     gear4music.close_scraper()
-    gear4music.upload_to_bucket('productwebscraper')
+    #gear4music.upload_to_bucket('productwebscraper')
 
 # %%
