@@ -35,14 +35,13 @@ class Scraper:
         """
         See help(Scraper)
         """
-        options = Options()
-        options.add_argument("--headless") # Runs Chrome in headless mode.
-        #options.add_argument('--no-sandbox') # # Bypass OS security model
-        #options.add_argument('start-maximized')
-        #options.add_argument('disable-infobars')
-        #options.add_argument("--disable-extensions")
+        driver_options = Options()
+        driver_options.add_argument("--headless") # Runs Chrome in headless mode.
+        driver_options.add_argument('--no-sandbox') # # Bypass OS security model
+        driver_options.add_argument('--disable-gpu')
+        driver_options.add_argument("--disable-dev-shm-usage ")
         self.website_url = website_url
-        self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), chrome_options=options)
+        self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=driver_options)
         self.raw_data_directory = 'raw_data'
         self.image_database_name = 'images'
 
@@ -96,7 +95,7 @@ class Scraper:
             "?page=" + str(page)
         self.driver.get(url)
         time.sleep(3)
-        products = self.driver.find_elements_by_xpath(
+        products = self.driver.find_elements(by=By.XPATH, value= 
             "//*[@class='g4m-grid-product-listing']/a")
         list_of_product_urls = [product.get_attribute(
             "href") for product in products]
@@ -109,7 +108,7 @@ class Scraper:
         Returns:
             stock(str): The stock number of the product on the webdriver's current page.
         """
-        stock_container = self.driver.find_elements_by_xpath(
+        stock_container = self.driver.find_elements(by=By.XPATH, value= 
             "//div[@class='tooltip-container info-row-stock info-row-item']/div")[0]
         if stock_container.get_attribute("class") == "tooltip-source info-row-stock-msg instock in-stock":
             stock = stock_container.text.split()[0]
@@ -124,7 +123,7 @@ class Scraper:
         Returns:
             sale(bool): True if the product on the webdriver's current page is on sale.
         """
-        special_messages = self.driver.find_elements_by_xpath(
+        special_messages = self.driver.find_elements(by=By.XPATH, value=
             "//div[@class='info-row-special-msg info-row-item']"
         )
         sale = False
@@ -144,7 +143,7 @@ class Scraper:
         main_image = self.driver.find_element(by=By.XPATH, value =
             "//img[@class='main-image']"
         ).get_attribute("src")
-        other_images_container = self.driver.find_elements_by_xpath(
+        other_images_container = self.driver.find_elements( by =By.XPATH, value=
             "//li[@class='image']/a"
         )
         images = [image.get_attribute(
@@ -428,7 +427,7 @@ class Scraper:
         """
 
         self.driver.get(product_url)
-        number_of_products = self.driver.find_elements_by_xpath(
+        number_of_products = self.driver.find_elements(by=By.XPATH, value= 
             "//p[@data-test='plp-product-listing-count-message']/span")
         pages_avaliable = int(
             np.ceil(int(number_of_products[1].text)/int(number_of_products[0].text)))
