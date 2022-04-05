@@ -17,7 +17,6 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from yaml import safe_load as yaml_load
 # %%
 
 
@@ -47,15 +46,14 @@ class Scraper:
 
         #sets up database
 
-        with open(".gitignore/credidentials.yml") as file:
-            credientials  = yaml_load(file)
-        DATABASE_TYPE = credientials['DATABASE_TYPE']
-        DBAPI = credientials['DBAPI'] 
-        ENDPOINT = credientials['ENDPOINT']       
-        USER = credientials['USER']
-        PASSWORD = credientials['PASSWORD']
-        PORT = credientials['PORT']
-        DATABASE = credientials['DATABASE']
+        DATABASE_TYPE = 'postgresql'
+        DBAPI = 'psycopg2'
+        ENDPOINT = 'productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com' 
+        USER = 'postgres'
+        PASSWORD = input("Enter RDS password:")
+        PORT = 5432
+        DATABASE = 'postgres' 
+
         self.engine = create_engine(f"{DATABASE_TYPE}+{DBAPI}://{USER}:{PASSWORD}@{ENDPOINT}:{PORT}/{DATABASE}")
         self.engine.execute('''  CREATE TABLE if not exists raw_data(
                                     product_uuid TEXT, 
