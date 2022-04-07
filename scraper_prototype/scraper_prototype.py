@@ -6,6 +6,7 @@ import requests
 import time
 import uuid
 import shutil
+import sys
 import boto3
 import numpy as np
 import pandas as pd
@@ -27,6 +28,7 @@ class Scraper:
 
     Attributes:
         website_url (str): The URL of the Website to be scraped.
+        credential_file (str): The file path to the yaml document containing the database credentials. 
 
     """
 
@@ -46,6 +48,7 @@ class Scraper:
 
         #sets up database
 
+<<<<<<< HEAD
         DATABASE_TYPE = 'postgresql'
         DBAPI = 'psycopg2'
         ENDPOINT = 'productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com' 
@@ -54,6 +57,17 @@ class Scraper:
         PORT = 5432
         DATABASE = 'postgres' 
 
+=======
+        with open("config/credentials.yml") as file:
+            credentials  = yaml_load(file)
+        DATABASE_TYPE = credentials['DATABASE_TYPE']
+        DBAPI = credentials['DBAPI'] 
+        ENDPOINT = credentials['ENDPOINT']       
+        USER = credentials['USER']
+        PASSWORD = credentials['PASSWORD']
+        PORT = credentials['PORT']
+        DATABASE = credentials['DATABASE']
+>>>>>>> security_improvements
         self.engine = create_engine(f"{DATABASE_TYPE}+{DBAPI}://{USER}:{PASSWORD}@{ENDPOINT}:{PORT}/{DATABASE}")
         self.engine.execute('''  CREATE TABLE if not exists raw_data(
                                     product_uuid TEXT, 

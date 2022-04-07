@@ -9,3 +9,16 @@ To prevent rescraping, the scraper takes advantage of the unique product referen
 
 # Monitoring
 The EC2 instance can be monitored via a Grafana dashboard which measures metrics using Prometheus running inside the instance. Metrics collected include container states, CPU, RAM, total uptime and rate of HTTP requests. 
+# RDS Security Fix
+The credentials for the RDS are accessed from /config/credentials.yml and should contain: 
+
+
+DATABASE_TYPE 
+DBAPI 
+ENDPOINT
+USER 
+PASSWORD 
+PORT
+DATABASE 
+
+The credentials for the correct database should be attached when the docker container is run using -v /path/to/local/credentials:/config/credentials.yml
