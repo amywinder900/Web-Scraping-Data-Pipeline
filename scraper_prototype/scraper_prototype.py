@@ -10,6 +10,7 @@ import sys
 import boto3
 import numpy as np
 import pandas as pd
+from yaml import load as yaml_load
 from sqlalchemy import create_engine
 from selenium import webdriver
 from pathlib import Path
@@ -48,16 +49,6 @@ class Scraper:
 
         #sets up database
 
-<<<<<<< HEAD
-        DATABASE_TYPE = 'postgresql'
-        DBAPI = 'psycopg2'
-        ENDPOINT = 'productwebscraper.coiufgnqszer.us-east-1.rds.amazonaws.com' 
-        USER = 'postgres'
-        PASSWORD = input("Enter RDS password:")
-        PORT = 5432
-        DATABASE = 'postgres' 
-
-=======
         with open("config/credentials.yml") as file:
             credentials  = yaml_load(file)
         DATABASE_TYPE = credentials['DATABASE_TYPE']
@@ -67,7 +58,6 @@ class Scraper:
         PASSWORD = credentials['PASSWORD']
         PORT = credentials['PORT']
         DATABASE = credentials['DATABASE']
->>>>>>> security_improvements
         self.engine = create_engine(f"{DATABASE_TYPE}+{DBAPI}://{USER}:{PASSWORD}@{ENDPOINT}:{PORT}/{DATABASE}")
         self.engine.execute('''  CREATE TABLE if not exists raw_data(
                                     product_uuid TEXT, 

@@ -1,7 +1,7 @@
 # Web-Scraping-Data-Pipeline
 In this lab, you'll implement an industry grade data collection pipeline that runs scalably in the cloud.
 
-The webscraper retrieves data about microphones from gear4music.com and uploads it to an RDS database and S2 bucket. 
+The webscraper retrieves data about microphones from gear4music.com and uploads it to an RDS database and S3 bucket. 
 
 # Docker Image
 The docker image can be obtained from amywinder900/webscraper 
