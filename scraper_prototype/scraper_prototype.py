@@ -6,6 +6,7 @@ import requests
 import time
 import uuid
 import shutil
+import sys
 import boto3
 import numpy as np
 import pandas as pd
@@ -28,6 +29,7 @@ class Scraper:
 
     Attributes:
         website_url (str): The URL of the Website to be scraped.
+        credential_file (str): The file path to the yaml document containing the database credentials. 
 
     """
 
@@ -47,15 +49,15 @@ class Scraper:
 
         #sets up database
 
-        with open(".gitignore/credidentials.yml") as file:
-            credientials  = yaml_load(file)
-        DATABASE_TYPE = credientials['DATABASE_TYPE']
-        DBAPI = credientials['DBAPI'] 
-        ENDPOINT = credientials['ENDPOINT']       
-        USER = credientials['USER']
-        PASSWORD = credientials['PASSWORD']
-        PORT = credientials['PORT']
-        DATABASE = credientials['DATABASE']
+        with open("config/credentials.yml") as file:
+            credentials  = yaml_load(file)
+        DATABASE_TYPE = credentials['DATABASE_TYPE']
+        DBAPI = credentials['DBAPI'] 
+        ENDPOINT = credentials['ENDPOINT']       
+        USER = credentials['USER']
+        PASSWORD = credentials['PASSWORD']
+        PORT = credentials['PORT']
+        DATABASE = credentials['DATABASE']
         self.engine = create_engine(f"{DATABASE_TYPE}+{DBAPI}://{USER}:{PASSWORD}@{ENDPOINT}:{PORT}/{DATABASE}")
         self.engine.execute('''  CREATE TABLE if not exists raw_data(
                                     product_uuid TEXT, 

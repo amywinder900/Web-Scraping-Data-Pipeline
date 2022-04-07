@@ -13,4 +13,4 @@ RUN \
     && unzip /tmp/chromedriver.zip chromedriver -d /usr/local/bin/
 COPY . . 
 RUN pip install -r requirements.txt
-ENTRYPOINT ["python3", "scraper_prototype/scraper_prototype.py"]
+ENTRYPOINT python3 scraper_prototype/scraper_prototype.py
