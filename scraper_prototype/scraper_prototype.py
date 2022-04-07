@@ -10,7 +10,7 @@ import sys
 import boto3
 import numpy as np
 import pandas as pd
-from yaml import load as yaml_load
+from yaml import safe_load as yaml_load
 from sqlalchemy import create_engine
 from selenium import webdriver
 from pathlib import Path
